@@ -190,7 +190,7 @@
   }
 
   function svg(paths) {
-    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+    return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
   }
 
   const icon = {
@@ -304,7 +304,10 @@
     }
 
     const changed = state.route !== name || state.id !== id;
-    if (changed) state.overlay = null;
+    if (changed) {
+      state.overlay = null;
+      state.editing = false;
+    }
     state.route = name;
     state.id = id;
     render();
@@ -459,7 +462,7 @@
     const animate = animKey !== state.animKey;
     state.animKey = animKey;
     if (view) view.innerHTML = renderRoute(animate) + renderOverlay();
-    if (state.overlay) document.querySelector("[data-autofocus]")?.focus();
+    if (state.overlay) document.querySelector(".overlay [data-autofocus]")?.focus();
     else if (filterKey) {
       const next = document.querySelector(`[data-filter="${CSS.escape(filterKey)}"]`);
       if (next) {
@@ -571,7 +574,7 @@
     const awarded = mine.filter((item) => item.status === "awarded");
     const waiting = open.filter((item) => activeProposals(item.id).some((bid) => bid.status === "submitted"));
     const prompt = waiting.length
-      ? `<a class="prompt" href="#/project/${esc(waiting[0].id)}"><span><strong>${waiting.length} project${waiting.length === 1 ? "" : "s"} ready to compare</strong><span>Review the proposals and accept the one you want.</span></span><span class="btn btn-primary btn-small">Compare</span></a>`
+      ? `<a class="prompt" href="#/project/${esc(waiting[0].id)}"><span><strong>${waiting.length} project${waiting.length === 1 ? "" : "s"} ready to compare</strong><p class="fine">Review the proposals and accept the one you want.</p></span><span class="btn btn-primary btn-small">Compare</span></a>`
       : "";
     const suspended = me.status === "suspended"
       ? `<div class="banner rose"><strong>This company is suspended.</strong><p class="fine">Posting and proposals are paused until an admin reinstates the profile.</p></div>`
@@ -695,7 +698,7 @@
     const mine = me && myProposal(item.id) && myProposal(item.id).status !== "withdrawn";
     return `
       <a class="card" href="#/project/${esc(item.id)}">
-        <div class="card-top"><span class="code">${esc(CODES[item.category] || "PRJ")}</span>${mine ? statusChip("submitted") : statusChip(item.status)}</div>
+        <div class="card-top"><span class="code">${esc(CODES[item.category] || "PRJ")}</span>${mine ? `<span class="chip lime">Your proposal</span>` : statusChip(item.status)}</div>
         <h3>${esc(item.title)}</h3>
         <p class="meta">${esc(item.category)} · ${esc(item.city)}</p>
         <p class="price">${esc(money(item.budgetMin))}–${esc(money(item.budgetMax))}</p>
@@ -733,16 +736,23 @@
       ${award}
       ${facts}
       ${actions}
-      <section class="project-layout">
-        <article class="panel">
-          <h2>Scope</h2>
-          <p style="margin-top:10px">${esc(item.summary)}</p>
-          <ul class="scope">${item.scope.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>
-        </article>
-        ${isOwner || state.session.role === "admin" ? "" : `<aside class="sticky">${proposalBox(item, me)}</aside>`}
-      </section>
+      ${projectBody(item, me, isOwner)}
       ${isOwner || state.session.role === "admin" ? compareBlock(item, bids, isOwner) : ""}`;
     return body;
+  }
+
+  function scopePanel(item) {
+    return `
+      <article class="panel">
+        <h2>Scope</h2>
+        <p style="margin-top:10px">${esc(item.summary)}</p>
+        <ul class="scope">${item.scope.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>
+      </article>`;
+  }
+
+  function projectBody(item, me, isOwner) {
+    if (isOwner || state.session.role === "admin") return scopePanel(item);
+    return `<section class="project-layout">${scopePanel(item)}<aside class="sticky">${proposalBox(item, me)}</aside></section>`;
   }
 
   function awardBanner(item) {
@@ -760,8 +770,8 @@
     const comparable = live.filter((bid) => bid.status === "submitted" || bid.status === "accepted");
     const amounts = comparable.map((bid) => bid.amount);
     const weeks = comparable.map((bid) => bid.weeks);
-    const minAmount = Math.min(...amounts);
-    const minWeeks = Math.min(...weeks);
+    const minAmount = amounts.length ? Math.min(...amounts) : null;
+    const minWeeks = weeks.length ? Math.min(...weeks) : null;
     const spread = amounts.length > 1 ? Math.max(...amounts) - minAmount : 0;
     const cards = [...live].sort((a, b) => a.amount - b.amount).map((bid) => proposalCard(item, bid, isOwner, minAmount, minWeeks)).join("");
     const note = state.session.role === "admin" ? "Only the posting company can accept a proposal." : "Lowest amount and fastest schedule are marked.";
@@ -781,8 +791,8 @@
     const firm = company(bid.companyId);
     const tags = [];
     if (bid.status === "submitted" || bid.status === "accepted") {
-      if (bid.amount === minAmount) tags.push(`<span class="chip lime">Lowest</span>`);
-      if (bid.weeks === minWeeks) tags.push(`<span class="chip lime">Fastest</span>`);
+      if (minAmount !== null && bid.amount === minAmount) tags.push(`<span class="chip lime">Lowest</span>`);
+      if (minWeeks !== null && bid.weeks === minWeeks) tags.push(`<span class="chip lime">Fastest</span>`);
       const inside = bid.amount >= item.budgetMin && bid.amount <= item.budgetMax;
       tags.push(`<span class="chip ${inside ? "mint" : ""}">${inside ? "In range" : "Outside range"}</span>`);
     }
@@ -793,7 +803,7 @@
     return `
       <article class="${cls}">
         <div class="company-row"><span class="mono">${esc(mono(firm.name))}</span><a href="#/company/${esc(firm.id)}">${esc(firm.name)}</a></div>
-        <p class="meta">${esc(firm.trade)} · ${esc(firm.city)} · <span class="rating">${icon.star} ${firm.rating.toFixed(1)}</span></p>
+        <p class="meta">${esc(firm.trade)} · ${esc(firm.city)} · <span class="rating">${icon.star} ${esc(ratingText(firm))}</span></p>
         <div class="spread"><strong class="amount">${esc(moneyFull(bid.amount))}</strong>${statusChip(bid.status)}</div>
         <p class="meta">${esc(durationLabel(bid.weeks))} · ${esc(timeAgo(bid.updatedAt || bid.createdAt))}</p>
         <div class="tag-row">${tags.join("")}</div>
@@ -808,12 +818,12 @@
     if (me.status === "suspended") return `<div class="panel banner rose"><strong>Proposals are paused</strong><p class="fine">A suspended company cannot send a proposal.</p></div>`;
     if (me.status === "pending") return `<div class="panel banner sand"><strong>Waiting for approval</strong><p class="fine">An admin still needs to activate this company.</p></div>`;
     const existing = myProposal(item.id);
-    if (item.status !== "open") {
-      if (existing?.status === "accepted") return `<div class="panel banner"><strong>Your proposal was accepted</strong><p class="fine">${esc(moneyFull(existing.amount))} · ${esc(durationLabel(existing.weeks))}</p></div>`;
-      return `<div class="panel"><h2>Proposals are closed</h2><p class="fine">This project is ${esc(item.status)}.</p></div>`;
-    }
+    if (existing?.status === "accepted") return `<div class="panel banner"><strong>Your proposal was accepted</strong><p class="fine">${esc(moneyFull(existing.amount))} · ${esc(durationLabel(existing.weeks))}</p></div>`;
     if (existing?.status === "declined") {
       return `<div class="panel"><h2>Proposal declined</h2><p class="fine">${esc(moneyFull(existing.amount))} · ${esc(existing.summary)}</p></div>`;
+    }
+    if (item.status !== "open") {
+      return `<div class="panel"><h2>Proposals are closed</h2><p class="fine">This project is ${esc(item.status)}.</p></div>`;
     }
     const editing = existing && existing.status === "submitted";
     return `
@@ -850,7 +860,7 @@
       <section class="panel profile-hero">
         <span class="mono lg">${esc(mono(firm.name))}</span>
         <div>
-          <div class="chips">${statusChip(firm.status)}<span class="rating">${icon.star} ${firm.rating.toFixed(1)}</span></div>
+          <div class="chips">${statusChip(firm.status)}<span class="rating">${icon.star} ${esc(ratingText(firm))}</span></div>
           <h1>${esc(firm.name)}</h1>
           <p class="lede">${esc(firm.trade)} · ${esc(firm.city)} · ${firm.people} people · Est. ${esc(firm.founded)}</p>
         </div>
@@ -913,7 +923,7 @@
           <a class="card" href="#/company/${esc(firm.id)}">
             <div class="company-row"><span class="mono">${esc(mono(firm.name))}</span><strong>${esc(firm.name)}</strong></div>
             <p class="meta">${esc(firm.trade)} · ${esc(firm.city)}</p>
-            <p class="rating">${icon.star} ${firm.rating.toFixed(1)} · ${firm.completed} completed</p>
+            <p class="rating">${icon.star} ${esc(ratingText(firm))} · ${firm.completed} completed</p>
             <div class="chips">${firm.specialties.slice(0, 3).map((item) => `<span class="chip">${esc(item)}</span>`).join("")}</div>
           </a>`).join("")}
       </div>
@@ -1048,7 +1058,7 @@
             <p class="fine">${esc(overlay.body)}</p>
             <div class="right" style="margin-top:18px">
               <button class="btn btn-ghost" type="button" data-action="close">Cancel</button>
-              <button class="btn ${overlay.tone === "danger" ? "btn-danger" : "btn-primary"}" type="button" data-action="${esc(overlay.action)}" data-id="${esc(overlay.id || "")}" data-autofocus>${esc(overlay.yes)}</button>
+              <button class="btn ${overlay.tone === "danger" ? "btn-danger" : "btn-primary"}" type="button" data-action="${esc(overlay.action)}" data-id="${esc(overlay.id || "")}" data-status="${esc(overlay.status || "")}" data-autofocus>${esc(overlay.yes)}</button>
             </div>
           </div>
         </div>`;
@@ -1104,8 +1114,17 @@
     return Number.isFinite(n) ? n : NaN;
   }
 
-  function listFrom(text) {
-    return String(text || "").split(/,|\n/).map((item) => item.trim()).filter(Boolean);
+  function commaList(text) {
+    return String(text || "").split(",").map((item) => item.trim()).filter(Boolean);
+  }
+
+  function lineList(text) {
+    return String(text || "").split(/\n/).map((item) => item.trim()).filter(Boolean);
+  }
+
+  function ratingText(firm) {
+    if (!firm?.rating) return "New";
+    return firm.rating.toFixed(1);
   }
 
   function requireActive(me) {
@@ -1176,7 +1195,6 @@
     },
     close() {
       state.overlay = null;
-      state.editing = false;
       render();
     },
     "overlay-bg"(el, event) {
@@ -1207,7 +1225,7 @@
       const budgetMin = num(data.budgetMin);
       const budgetMax = num(data.budgetMax);
       const weeks = num(data.weeks);
-      const scope = listFrom(data.scope);
+      const scope = lineList(data.scope);
       if (data.title.length < 3) return showToast("Add a project title.");
       if (!CATEGORIES.includes(data.category)) return showToast("Choose a project type.");
       if (data.city.length < 2) return showToast("Add a city.");
@@ -1450,8 +1468,8 @@
         city: data.city,
         people: Math.round(people),
         about: data.about,
-        specialties: listFrom(data.specialties),
-        certifications: listFrom(data.certifications),
+        specialties: commaList(data.specialties),
+        certifications: commaList(data.certifications),
       });
       state.editing = false;
       persist();
@@ -1463,7 +1481,8 @@
       if (!note || note.read) return;
       note.read = true;
       persist();
-      updateChrome();
+      if (el.getAttribute("href") === location.hash) render();
+      else updateChrome();
     },
     "read-all"() {
       notesForMe().forEach((note) => { note.read = true; });
@@ -1474,8 +1493,9 @@
     "set-status"(el) {
       if (state.session?.role !== "admin") return;
       const firm = company(el.dataset.id);
-      if (!firm) return;
-      firm.status = el.dataset.status === "suspended" ? "suspended" : "active";
+      const next = el.dataset.status;
+      if (!firm || (next !== "active" && next !== "suspended")) return;
+      firm.status = next;
       notify(firm.id, firm.status === "active" ? "Company active" : "Company suspended", firm.status === "active" ? "An admin activated your company." : "An admin suspended your company.", "profile", false);
       persist();
       showToast(firm.status === "active" ? `${firm.name} is now active.` : `${firm.name} is suspended.`);
@@ -1491,6 +1511,7 @@
         yes: "Suspend",
         action: "set-status",
         id: firm.id,
+        status: "suspended",
         tone: "danger",
       };
       render();

@@ -422,8 +422,9 @@ select {
   text-decoration: none;
 }
 .prompt:hover { text-decoration: none; transform: translateY(-2px); }
-.prompt strong { display: block; font-family: Syne, sans-serif; font-size: 18px; }
-.prompt span { color: var(--muted); }
+.prompt { transition: transform 0.18s ease; }
+.prompt strong { display: block; font-family: Syne, sans-serif; font-size: 18px; color: var(--text); }
+.prompt .fine { margin: 0; }
 
 .list { display: flex; flex-direction: column; gap: 10px; }
 .item {
@@ -499,7 +500,9 @@ a.card:hover { text-decoration: none; transform: translateY(-3px); border-color:
   font-size: 18px;
 }
 .company-row { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
-.rating { color: var(--lime); font-weight: 650; font-size: 13px; }
+.rating { color: var(--lime); font-weight: 650; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; }
+.proposal .btn { margin-top: auto; }
+.top-actions .who strong, .top-actions .who small { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .facts {
   display: grid;
